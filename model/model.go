@@ -6,11 +6,12 @@ type Node struct {
 	Name     string  `json:"name"`
 	Subtitle string  `json:"subtitle"`
 	Value    float32 `json:"value"`
+	Active   int     `json:"active"`
 }
 
 type Edge struct {
-	Src int `json:"src"`
-	Dst int `json:"dst"`
+	Src int `json:"sid"`
+	Dst int `json:"tid"`
 	Weight int `json:"weight"`
 }
 
