@@ -8,6 +8,7 @@ import (
 	. "github.com/shawnsky/ty-network-d3/model"
 	"io"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -29,11 +30,12 @@ type SimulateOption struct {
 }
 
 func buildHiggsSocialNetwork(G *Graph) {
+	ran := rand.New(rand.NewSource(time.Now().UnixNano()))
 	G.nodes = make([]*Node, 0)
 	G.edges = make(map[int][]int)
 	// Add nodes
 	for i := 1; i < 100; i++ {
-		G.nodes = append(G.nodes, &Node{ID: i, Name: "HiggsSocialNode", Subtitle: "", Active: 0})
+		G.nodes = append(G.nodes, &Node{ID: i, Name: "HiggsSocialNode", Subtitle: "", Active: 0, Threshold: ran.Float32(), IsLeader: 0, SpreadWilling: ran.Float32()})
 	}
 
 	// Add edges
@@ -75,12 +77,52 @@ func findNodeById(G *Graph, id int) *Node {
 	return nil
 }
 
+// 根据节点id查找邻居节点id列表
+func findNeighbors(G *Graph, id int) []int {
+	return  G.edges[id]
+}
+
+// 权重生成算法，服从正态分布
+// 期望中值 0.5 标准差 0.22
+func generateWeight() (weight float64) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var devstd, mean float64 = 0.22, 0.5
+	weight = r.NormFloat64() * devstd + mean
+	if weight < 0 || weight > 1 {
+		weight = generateWeight()
+	}
+	return
+}
+
+
+// 用于初始观点值赋值，取决于源值src
+// 如果源值为-1，表示初始节点值生成，随机返回0或1
+func generateValue(src float32) (val float32) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	if src == -1 {
+		if r.Float32() <= 0.5 {
+			val = 0
+		} else {
+			val = 1
+		}
+		return
+	}
+	var min, max float32
+	if src >=0 && src < 0.5 {
+		min, max = 0, 0.5
+	} else {
+		min, max = 0.5, 1
+	}
+	val = min + r.Float32() * (max - min)
+	return
+}
+
 // 尝试激活邻居
 func active(G *Graph, starter int, option SimulateOption) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	neighbors := G.edges[starter]
+	starterNode := findNodeById(G, starter)
+	neighbors := findNeighbors(G, starter)
 	p := option.pActive
-
 
 	for _, nodeId := range neighbors {
 		node := findNodeById(G, nodeId)
@@ -88,11 +130,53 @@ func active(G *Graph, starter int, option SimulateOption) {
 			G.lock.RLock()
 			// 设置状态
 			node.Active = 1
-			// TODO: 设置观点值
+			node.Value = generateValue(starterNode.Value)
 			time.Sleep(time.Millisecond*500)
 			G.lock.RUnlock()
-			go active(G, nodeId, option)
+			if r.Float32() < node.SpreadWilling {
+				go active(G, nodeId, option)
+			}
+			go evolve(G, nodeId)
 		}
+	}
+}
+
+// 观点值更新算法实现
+func updateValue(G *Graph, id int) {
+	self := findNodeById(G, id)
+
+	// 计算沟通阈值内节点平均值
+	var sum, svg float32 = 0, 0
+	cnt := 0
+	for _, node := range G.nodes {
+		// 如果目标节点已激活，而且其观点值在沟通阈值范围内
+		if node.Active == 1 && float32(math.Abs(float64(self.Value-node.Value))) <= self.Threshold {
+			cnt += 1
+			sum += node.Value
+		}
+	}
+	if cnt == 0 {
+		svg = self.Value
+	}
+	svg = sum / float32(cnt)
+
+	// 权重生成
+	weight := float32(generateWeight())
+	// 更新观点值
+	G.lock.RLock()
+	self.Value = weight * self.Value + (1-weight) * svg
+	G.lock.RUnlock()
+	//if id == 20 {
+	//	fmt.Println(self.Value)
+	//}
+
+}
+
+// 调用evolve函数进入演化状态，被设置为演化状态的节点值会根据邻居节点值持续改变
+func evolve(G *Graph, id int) {
+	for {
+		updateValue(G, id)
+		time.Sleep(time.Second)
 	}
 }
 
@@ -102,18 +186,10 @@ func simulate(G *Graph, option SimulateOption) {
 	for _, nodeId := range *option.starter {
 		node := findNodeById(G, nodeId)
 		node.Active = 1
-		// 起始点观点值随机：0或1
-		if rand.Float32() <= 0.5 {
-			node.Value = 0
-		} else {
-			node.Value = 1
-		}
+		node.IsLeader = 1
+		node.Value = generateValue(-1)
 		go active(G, nodeId, option)
 	}
-	// 观点更新
-	// 规则：起始点必须是0/1？
-	//      被激活的人的观点值赋值依据？比如传播者观点值为 0.6，那么激活者的观点值为？
-	//      观点值更新公式？
 }
 
 // 生成PushMessage，传送整个网络结构

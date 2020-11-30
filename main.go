@@ -1,6 +1,8 @@
 package main
 
-import s "github.com/shawnsky/ty-network-d3/server"
+import (
+	s "github.com/shawnsky/ty-network-d3/server"
+)
 
 func main() {
 	server := s.NewServer(":7341")
