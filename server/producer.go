@@ -53,7 +53,8 @@ func buildHiggsSocialNetwork(G *Graph) {
 	}
 
 	// Add edges
-	csvFile, err := os.Open("/Users/amalthea/Projects/golang/gopath/src/github.com/shawnsky/ty-network-d3/server/higgs-social_network-1000.csv")
+	pwd, _ := os.Getwd()
+	csvFile, err := os.Open(pwd + "/server/higgs-social_network-1000.csv")
 	if err != nil {
 		log.Fatalln("Couldn't open the csv file", err)
 	}
