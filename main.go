@@ -9,8 +9,6 @@ func main() {
 
 	// Define websocket connect url, default "/ws"
 	server.WSPath = "/ws"
-	// Define produce message url, default "/produce"
-	server.PushPath = "/produce"
 
 	// Run server
 	if err := server.ListenAndServe(); err != nil {

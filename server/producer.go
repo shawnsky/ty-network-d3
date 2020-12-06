@@ -1,7 +1,6 @@
-package main
+package server
 
 import (
-	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -10,36 +9,51 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 )
-
-type Graph struct {
-	nodes []*Node          // 节点集
-	edges map[int][]int // 邻接表表示的无向图
-	lock  sync.RWMutex
-
-}
 
 type SimulateOption struct {
 	starter *[]int
 	pActive float32
 }
 
+type Producer struct {
+	conn *Conn
+	running bool
+	chActive chan int
+	chEvolve chan int
+}
+
+var instance *Producer
+
+func GetInstance() *Producer {
+	if instance == nil {
+		pd := Producer{
+			chActive: make(chan int),
+			chEvolve: make(chan int),
+		}
+		instance = &pd
+	}
+	return instance
+}
+
+func (p *Producer) SetConn(c *Conn) {
+	p.conn = c
+}
+
 func buildHiggsSocialNetwork(G *Graph) {
 	ran := rand.New(rand.NewSource(time.Now().UnixNano()))
-	G.nodes = make([]*Node, 0)
-	G.edges = make(map[int][]int)
+	G.Nodes = make([]*Node, 0)
+	G.Edges = make(map[int][]int)
 	// Add nodes
 	for i := 1; i < 100; i++ {
-		G.nodes = append(G.nodes, &Node{ID: i, Name: "HiggsSocialNode", Subtitle: "", Active: 0, Threshold: ran.Float32(), IsLeader: 0, SpreadWilling: ran.Float32()})
+		G.Nodes = append(G.Nodes, &Node{ID: i, Name: "HiggsSocialNode", Subtitle: "", Active: 0, Threshold: ran.Float32(), IsLeader: 0, SpreadWilling: ran.Float32()})
 	}
 
 	// Add edges
-	csvFile, err := os.Open("/Users/amalthea/Projects/golang/gopath/src/github.com/shawnsky/ty-network-d3/produce/higgs-social_network-1000.csv")
+	csvFile, err := os.Open("/Users/amalthea/Projects/golang/gopath/src/github.com/shawnsky/ty-network-d3/server/higgs-social_network-1000.csv")
 	if err != nil {
 		log.Fatalln("Couldn't open the csv file", err)
 	}
@@ -57,18 +71,18 @@ func buildHiggsSocialNetwork(G *Graph) {
 		src, _ := strconv.Atoi(record[0])
 		dst, _ := strconv.Atoi(record[1])
 		// 需要判断src节点的边集合是否初始化完成
-		_, ok := G.edges[src]
+		_, ok := G.Edges[src]
 		if !ok {
-			G.edges[src] = make([]int, 0)
+			G.Edges[src] = make([]int, 0)
 		}
-		G.edges[src] = append(G.edges[src], dst)
+		G.Edges[src] = append(G.Edges[src], dst)
 
 	}
 }
 
 // 根据节点id查找节点对象指针
 func findNodeById(G *Graph, id int) *Node {
-	nodeSet := G.nodes
+	nodeSet := G.Nodes
 	for _, node := range nodeSet {
 		if node.ID == id {
 			return node
@@ -79,7 +93,7 @@ func findNodeById(G *Graph, id int) *Node {
 
 // 根据节点id查找邻居节点id列表
 func findNeighbors(G *Graph, id int) []int {
-	return  G.edges[id]
+	return  G.Edges[id]
 }
 
 // 权重生成算法，服从正态分布
@@ -127,12 +141,12 @@ func active(G *Graph, starter int, option SimulateOption) {
 	for _, nodeId := range neighbors {
 		node := findNodeById(G, nodeId)
 		if node != nil && node.Active == 0 && r.Float32() < p {
-			G.lock.RLock()
+			G.Lock.RLock()
 			// 设置状态
 			node.Active = 1
 			node.Value = generateValue(starterNode.Value)
 			time.Sleep(time.Millisecond*500)
-			G.lock.RUnlock()
+			G.Lock.RUnlock()
 			if r.Float32() < node.SpreadWilling {
 				go active(G, nodeId, option)
 			}
@@ -148,7 +162,7 @@ func updateValue(G *Graph, id int) {
 	// 计算沟通阈值内节点平均值
 	var sum, svg float32 = 0, 0
 	cnt := 0
-	for _, node := range G.nodes {
+	for _, node := range G.Nodes {
 		// 如果目标节点已激活，而且其观点值在沟通阈值范围内
 		if node.Active == 1 && float32(math.Abs(float64(self.Value-node.Value))) <= self.Threshold {
 			cnt += 1
@@ -163,9 +177,9 @@ func updateValue(G *Graph, id int) {
 	// 权重生成
 	weight := float32(generateWeight())
 	// 更新观点值
-	G.lock.RLock()
+	G.Lock.RLock()
 	self.Value = weight * self.Value + (1-weight) * svg
-	G.lock.RUnlock()
+	G.Lock.RUnlock()
 	//if id == 20 {
 	//	fmt.Println(self.Value)
 	//}
@@ -198,11 +212,11 @@ func initGraphFrame(G *Graph) (pm PushMessage) {
 	pm.Edges = make([]Edge, 0)
 	pm.Nodes = make([]Node, 0)
 
-	for i := 0; i < len(G.nodes); i++ {
-		nodeId := G.nodes[i].ID
-		pm.Nodes = append(pm.Nodes, *G.nodes[i])
+	for i := 0; i < len(G.Nodes); i++ {
+		nodeId := G.Nodes[i].ID
+		pm.Nodes = append(pm.Nodes, *G.Nodes[i])
 		singleNodeEdgePairs := make([]Edge, 0)
-		nodeEdges := G.edges[nodeId]
+		nodeEdges := G.Edges[nodeId]
 		for k := 0; k < len(nodeEdges); k++ {
 			singleNodeEdgePairs = append(singleNodeEdgePairs, Edge{Src: nodeId, Dst: nodeEdges[k]})
 		}
@@ -213,26 +227,27 @@ func initGraphFrame(G *Graph) (pm PushMessage) {
 }
 
 
-func push(G *Graph) {
+func push(G *Graph, conn *Conn) {
 	pm := initGraphFrame(G)
-	pushURL := "http://127.0.0.1:7341/produce"
-	contentType := "application/json"
+
 	pm.Appendix = fmt.Sprintf("Data in %s", time.Now().Format("2006-01-02 15:04:05.000"))
-	b, _ := json.Marshal(pm)
-	_, err := http.DefaultClient.Post(pushURL, contentType, bytes.NewReader(b))
+
+	jsonData,_ := json.Marshal(pm)
+	_, err := conn.Write(jsonData)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func pushForever(G *Graph) {
+func pushForever(G *Graph, conn *Conn) {
 	for {
-		push(G)
+		push(G, conn)
 		time.Sleep(time.Millisecond * 500)
 	}
 }
 
-func main() {
+
+func (p *Producer) Start() {
 	var G = Graph{}
 	buildHiggsSocialNetwork(&G)
 	option := SimulateOption{
@@ -240,7 +255,7 @@ func main() {
 		starter: &[]int{1, 24},
 	}
 	simulate(&G, option)
-	pushForever(&G)
+	pushForever(&G, p.conn)
 
 
 }

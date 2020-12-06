@@ -2,13 +2,10 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
-	"github.com/shawnsky/ty-network-d3/model"
 	"io"
 	"net/http"
-	"strings"
 )
 
 type websocketHandler struct {
@@ -40,10 +37,23 @@ func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := decoder.Decode(&rm); err != nil {
 			return
 		}
-
-		fmt.Println("Get reg")
-		// discard browser msg, just bind
 		wh.Conn = conn
+
+		// for control
+		switch rm.BrowserMessage {
+		case "register":
+			fmt.Println("Connection established.")
+			break
+		case "start":
+			fmt.Println("Start to simulate.")
+			producer := GetInstance()
+			producer.SetConn(conn)
+			producer.Start()
+
+		default:
+			break
+		}
+
 	}
 
 	conn.BeforeCloseFunc = func() {
@@ -53,46 +63,6 @@ func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	conn.Listen()
 }
-
-
-// ErrRequestIllegal describes error when data of the request is unaccepted.
-var ErrRequestIllegal = errors.New("request data illegal")
-
-// produceHandler defines to handle produce message request.
-type produceHandler struct {
-	websocketHandler *websocketHandler
-}
-
-func (s *produceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-
-	// read model state
-	var pm model.PushMessage
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&pm); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(ErrRequestIllegal.Error()))
-		return
-	}
-
-	fmt.Println("WS server read from produce",pm)
-	// continue send to ws client
-	jsonData,_ := json.Marshal(pm)
-	_, err := s.websocketHandler.Conn.Write(jsonData)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	result := strings.NewReader(fmt.Sprintf("message sent to client\n"))
-	io.Copy(w, result)
-}
-
 
 
 

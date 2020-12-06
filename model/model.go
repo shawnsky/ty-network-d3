@@ -1,5 +1,6 @@
 package model
 
+import "sync"
 
 type Node struct {
 	ID       int     `json:"id"`
@@ -16,6 +17,12 @@ type Edge struct {
 	Src int `json:"sid"`
 	Dst int `json:"tid"`
 	Weight int `json:"weight"`
+}
+
+type Graph struct {
+	Nodes []*Node          // 节点集
+	Edges map[int][]int // 邻接表表示的无向图
+	Lock  sync.RWMutex
 }
 
 // PushMessage defines message struct send by client to produce to ws client
