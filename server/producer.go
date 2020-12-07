@@ -49,7 +49,7 @@ func buildHiggsSocialNetwork(G *Graph) {
 	G.Edges = make(map[int][]int)
 	// Add nodes
 	for i := 1; i < 100; i++ {
-		G.Nodes = append(G.Nodes, &Node{ID: i, Name: "HiggsSocialNode", Subtitle: "", Active: 0, Threshold: ran.Float32(), IsLeader: 0, SpreadWilling: ran.Float32()})
+		G.Nodes = append(G.Nodes, &Node{ID: i, Name: "HiggsSocialNode", Subtitle: "", Active: 0, Threshold: ran.Float64(), IsLeader: 0, SpreadWilling: ran.Float64()})
 	}
 
 	// Add edges
@@ -112,23 +112,23 @@ func generateWeight() (weight float64) {
 
 // 用于初始观点值赋值，取决于源值src
 // 如果源值为-1，表示初始节点值生成，随机返回0或1
-func generateValue(src float32) (val float32) {
+func generateValue(src float64) (val float64) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	if src == -1 {
-		if r.Float32() <= 0.5 {
+		if r.Float64() <= 0.5 {
 			val = 0
 		} else {
 			val = 1
 		}
 		return
 	}
-	var min, max float32
+	var min, max float64
 	if src >=0 && src < 0.5 {
 		min, max = 0, 0.5
 	} else {
 		min, max = 0.5, 1
 	}
-	val = min + r.Float32() * (max - min)
+	val = min + r.Float64() * (max - min)
 	return
 }
 
@@ -148,7 +148,7 @@ func active(G *Graph, starter int, option SimulateOption) {
 			node.Value = generateValue(starterNode.Value)
 			time.Sleep(time.Millisecond*500)
 			G.Lock.RUnlock()
-			if r.Float32() < node.SpreadWilling {
+			if r.Float64() < node.SpreadWilling {
 				go active(G, nodeId, option)
 			}
 			go evolve(G, nodeId)
@@ -161,11 +161,11 @@ func updateValue(G *Graph, id int) {
 	self := findNodeById(G, id)
 
 	// 计算沟通阈值内节点平均值
-	var sum, svg float32 = 0, 0
+	var sum, svg float64 = 0, 0
 	cnt := 0
 	for _, node := range G.Nodes {
 		// 如果目标节点已激活，而且其观点值在沟通阈值范围内
-		if node.Active == 1 && float32(math.Abs(float64(self.Value-node.Value))) <= self.Threshold {
+		if node.Active == 1 && math.Abs(self.Value-node.Value) <= self.Threshold {
 			cnt += 1
 			sum += node.Value
 		}
@@ -173,10 +173,10 @@ func updateValue(G *Graph, id int) {
 	if cnt == 0 {
 		svg = self.Value
 	}
-	svg = sum / float32(cnt)
+	svg = sum / float64(cnt)
 
 	// 权重生成
-	weight := float32(generateWeight())
+	weight := generateWeight()
 	// 更新观点值
 	G.Lock.RLock()
 	self.Value = weight * self.Value + (1-weight) * svg

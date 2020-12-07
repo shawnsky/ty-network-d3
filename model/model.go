@@ -6,11 +6,11 @@ type Node struct {
 	ID       int     `json:"id"`
 	Name     string  `json:"name"`
 	Subtitle string  `json:"subtitle"`
-	Value    float32 `json:"value"`
+	Value    float64 `json:"value"`
 	Active   int     `json:"active"`
-	Threshold float32 `json:"threshold"`
+	Threshold float64 `json:"threshold"`
 	IsLeader int     `json:"is_leader"`
-	SpreadWilling float32 `json:"spread_willing"`
+	SpreadWilling float64 `json:"spread_willing"`
 }
 
 type Edge struct {
