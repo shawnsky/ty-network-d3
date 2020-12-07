@@ -1,6 +1,8 @@
 package model
 
-import "sync"
+import (
+	"sync"
+)
 
 type Node struct {
 	ID       int     `json:"id"`
@@ -8,6 +10,8 @@ type Node struct {
 	Subtitle string  `json:"subtitle"`
 	Value    float64 `json:"value"`
 	Active   int     `json:"active"`
+	Evolved  int     `json:"evolved"`
+	Spread   int     `json:"spread"`
 	Threshold float64 `json:"threshold"`
 	IsLeader int     `json:"is_leader"`
 	SpreadWilling float64 `json:"spread_willing"`
@@ -31,3 +35,6 @@ type PushMessage struct {
 	Edges []Edge   `json:"edges"`
 	Appendix string `json:"appendix"`
 }
+
+
+

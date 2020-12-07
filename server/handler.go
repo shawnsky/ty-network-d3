@@ -49,6 +49,13 @@ func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			producer := GetInstance()
 			producer.SetConn(conn)
 			producer.Start()
+			break
+		case "pause":
+			fmt.Println("Pause.")
+			producer := GetInstance()
+			producer.Pause()
+			break
+
 
 		default:
 			break
